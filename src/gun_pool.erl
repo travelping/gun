@@ -532,7 +532,7 @@ init({Host, Port, Opts}) ->
 	case ets:insert_new(gun_pools, {PoolKey, self()}) of
 	false ->
 		[{_,ManagerPid}] = ets:lookup(gun_pools, PoolKey),
-		{stop, {error, {pool_exists, ManagerPid}}};
+		{stop, {pool_exists, ManagerPid}};
 	true ->
 		Tid = ets:new(gun_pooled_conns, [ordered_set, public]),
 		Size = maps:get(size, Opts, 8),
