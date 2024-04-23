@@ -25,6 +25,7 @@
 -export([info/2]).
 -export([await_up/1]).
 -export([await_up/2]).
+-export([await_up/3]).
 -export([checkout/2]). %% Use responsibly!
 
 %% Requests.
@@ -122,6 +123,7 @@
 %	@todo tunnel => stream_ref(),
 
 	%% Options specific to pools.
+	await_up_timeout => timeout(),
 	checkout_call_timeout => timeout(),
 	checkout_retry => [pos_integer()],
 	scope => any(),
@@ -133,6 +135,7 @@
 	authority => iodata(),
 
 	%% Options specific to pools.
+	await_up_timeout => timeout(),
 	checkout_call_timeout => timeout(),
 	checkout_retry => [pos_integer()],
 	scope => any(),
@@ -213,12 +216,16 @@ await_up(Authority) ->
 
 -spec await_up(binary(), any()) -> ok | {error, pool_not_found, atom()}.
 await_up(Authority, Scope) ->
+    await_up(Authority, Scope, 5000).
+
+-spec await_up(binary(), any(), non_neg_integer()) -> ok | {error, pool_not_found, atom()}.
+await_up(Authority, Scope, Timeout) ->
 	case ets:lookup(gun_pools, {Scope, Authority}) of
 		[] ->
 			{error, pool_not_found,
 				'No pool was found for the given scope and authority.'};
 		[{_, ManagerPid}] ->
-			gen_statem:call(ManagerPid, await_up, 5000)
+			gen_statem:call(ManagerPid, await_up, Timeout)
 	end.
 
 -spec checkout(pid(), req_opts() | ws_send_opts()) -> undefined | {pid(), map()}.
@@ -395,7 +402,8 @@ get_pool(Authority0, ReqOpts) ->
 			ManagerPid = start_missing_pool(Authority, StartPoolIfMissing),
 			%% If the pool is started dynamically we need it to be ready
 			%% in order to perform the call so an await_up is forced
-			await_up(ManagerPid),
+			AwaitUpTimeout = maps:get(await_up_timeout, ReqOpts, 500),
+			(catch gen_statem:call(ManagerPid, await_up, AwaitUpTimeout)),
 			ManagerPid;
 		[] ->
 			undefined;
